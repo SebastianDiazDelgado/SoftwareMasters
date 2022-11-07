@@ -1,3 +1,4 @@
+import { service } from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -16,15 +17,47 @@ import {
   del,
   requestBody,
   response,
+  HttpErrors,
 } from '@loopback/rest';
-import {Visitante} from '../models';
+import { request } from 'http';
+import { Visitante } from '../models';
+import { Credenciales } from '../models/credenciales.model';
 import {VisitanteRepository} from '../repositories';
+import { AutenticacionService } from '../services';
 
 export class VisitanteController {
   constructor(
     @repository(VisitanteRepository)
     public visitanteRepository : VisitanteRepository,
+    @service(AutenticacionService)
+    public visitanteAutenticacion: AutenticacionService
   ) {}
+  // Metodos propios
+  @post('/LoginVisitante')
+  @response(200,{
+    description: 'Visitante Login'
+  })
+  async LoginVisitante(
+    @requestBody() credenciales: Credenciales
+  ){
+    let v= await this.visitanteAutenticacion.IdentificarPersona(credenciales.usuario, credenciales.clave);
+    if(v){
+      let token=this.visitanteAutenticacion.GenerarToken(v);
+      return{
+        datos:{
+          nombre: v.nombre,
+          correo: v.correo,
+          id: v.id,
+          rol: v.rol
+        },
+        tk: token
+      }
+    }else{
+      throw new HttpErrors[401]('Datos no encontrados');
+    }
+  }
+
+  // Metodos generados.
 
   @post('/visitantes')
   @response(200, {

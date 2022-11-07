@@ -1,3 +1,4 @@
+import { service } from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -16,15 +17,48 @@ import {
   del,
   requestBody,
   response,
+  HttpErrors,
 } from '@loopback/rest';
+import { Keys } from '../config/keys';
 import {Usuarios} from '../models';
+import { Credenciales } from '../models/credenciales.model';
 import {UsuariosRepository} from '../repositories';
+import { AutenticacionService } from '../services';
+const fetch=require('node-fetch')
 
 export class UsuariosController {
   constructor(
     @repository(UsuariosRepository)
     public usuariosRepository : UsuariosRepository,
+    @service(AutenticacionService)
+    public servicioAutenticacion:AutenticacionService,
   ) {}
+  // Metodos propios.
+  @post('/LoginUsuario')
+  @response(200,{
+    description: 'Login para usuarios'
+  })
+  async loginUsuario(
+    @requestBody() credenciales: Credenciales
+  ){
+    let u= await this.servicioAutenticacion.IdentificarPersona(credenciales.usuario, credenciales.clave);
+    if(u){
+      let token=this.servicioAutenticacion.GenerarToken(u);
+      return {
+        datos:{
+          nombre: u.nombre,
+          correo: u.correo,
+          id: u.id,
+          rol: u.rol
+        },
+        tk: token
+      }
+    }else{
+      throw new HttpErrors[401]('Datos no encontrados');
+    }
+  }
+
+  //Metodo crear usuario y autenticacion de usuario.
 
   @post('/usuarios')
   @response(200, {
@@ -44,8 +78,24 @@ export class UsuariosController {
     })
     usuarios: Omit<Usuarios, 'id'>,
   ): Promise<Usuarios> {
-    return this.usuariosRepository.create(usuarios);
+    // Metodo Clave cifrada para el usuario.
+    let clave=this.servicioAutenticacion.GenerarClave();
+    let claveCifrada=this.servicioAutenticacion.CifrarClave(clave);
+    usuarios.clave=claveCifrada;
+    let u = await this.usuariosRepository.create(usuarios);
+    
+    //Notificar al usuario
+    let destino=usuarios.correo;
+    let asunto='Registro en la plataforma de AdventurePark';
+    let mensaje=`Hola ${usuarios.nombre}, su nombre de usuario es: ${usuarios.correo} y su contraseña es: ${clave} `;
+    fetch(`${Keys.urlNotificaciones}/e-mail?correo_destino=${destino}&asunto=${asunto}&contenido=${mensaje}`)
+      .then((data: any)=>{
+        console.log(data);
+      })
+      return u;
   }
+
+  //Metodos generados.
 
   @get('/usuarios/count')
   @response(200, {

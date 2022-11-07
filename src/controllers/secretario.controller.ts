@@ -1,3 +1,4 @@
+import { service } from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -16,16 +17,49 @@ import {
   del,
   requestBody,
   response,
+  HttpErrors,
 } from '@loopback/rest';
-import {Secretario} from '../models';
+import { CreateContextOptions } from 'vm';
+import { Secretario } from '../models';
+import { Credenciales } from '../models/credenciales.model';
 import {SecretarioRepository} from '../repositories';
+import { AutenticacionService } from '../services';
+
 
 export class SecretarioController {
   constructor(
     @repository(SecretarioRepository)
     public secretarioRepository : SecretarioRepository,
+    @service(AutenticacionService)
+    public secretarioAutenticacion: AutenticacionService
   ) {}
+  // Metodos propios
+  @post('/LoginSecretario')
+  @response(200,{
+    description: 'Secretario Login'
+  })
+  async LoginSercretario(
+    @requestBody() credenciales: Credenciales
+  ){
+    let s= await this.secretarioAutenticacion.IdentificarPersona(credenciales.usuario, credenciales.clave)
+    if(s){
+      let token= this.secretarioAutenticacion.GenerarToken(s)
+      return{
+        datos:{
+          nombre: s.nombre,
+          correo: s.correo,
+          id: s.id,
+          rol: s.rol
+        },
+        tk: token
+      }
+    }else{
+      throw new HttpErrors[401]('Error al encontrar los datos')
+    }
+  }
 
+
+  // Metodos generados
   @post('/secretarios')
   @response(200, {
     description: 'Secretario model instance',
